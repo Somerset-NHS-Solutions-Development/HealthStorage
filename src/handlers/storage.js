@@ -84,13 +84,17 @@ function statobject(bucket, file) {
 function putFileObject(bucket,dstfile,srcfile,metaData) {
     return new Promise((resolve, reject) => {
 		try {
+			console.log(srcfile);
 			const fileStream = fs.createReadStream(srcfile)
-			const fileStat = fs.stat(srcfile, function(err, stats) {
+			const fileStat = fs.stat(srcfile,async function(err, stats) {
 				if (err) {
 				return console.log(err)
 				}
-				client.putObject(bucket, dstfile, fileStream, stats.size, metaData, function(err, etag) {
-					if(err) reject(err);
+				await client.putObject(bucket, dstfile, fileStream, stats.size, metaData, function(err, etag) {
+					if(err) {
+						console.log(err);
+						reject(err);
+					}
 					resolve(etag) // err should be null
 				});
 			});
@@ -227,11 +231,13 @@ function mergeBucket(src,dst,urlPart) {
 							const etag = await putFileObject(dst,file,cachedFile,metaData);
 							
 							const dstfileInfo = await statobject(dst,file);
+							
 							if(dstfileInfo){
 								fs.unlink(cachedFile, (err) => {
-								  if (err) throw err;
-								  console.log(cachedFile+' was deleted');
-								});
+									if (err) throw err;
+									console.log(cachedFile+' was deleted');
+									
+								);
 								
 								await client.removeObject(src, file, function(err) {
 									if (err) throw err;

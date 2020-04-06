@@ -26,25 +26,28 @@ async function getSigningKey(token) {
 
 module.exports = async (req, res, next) => {
     try {
-		
-        const token = req.headers.authorization.split(' ')[1]		
-		const signingKey = await getSigningKey(token);
-		const options = { ignoreExpiration: false, maxAge : '10h', algorithms: ['RS256'] };
-		const claimPath = process.env.AccessClaimPath;
-		jwt.verify(token, signingKey, options, function(err, vdecoded) {
-				if(err){
-					console.log(err);
-					throw new Error('Unable to verify token');
-				}
-				req.userData = vdecoded;
-				req.userAccess = vdecoded[claimPath];
-				// Check Roles at least one role is present process.env.AccessReadRole, process.env.AccessWriteRole, process.env.AccessAdminRole
-				if(req.userAccess.indexOf(process.env.AccessReadRole) === -1 && req.userAccess.indexOf(process.env.AccessWriteRole) === -1 && req.userAccess.indexOf(process.env.AccessAdminRole) === -1){
-					throw new Error('Roles not found');
-				}
-			});
-        
-        next();
+		if(req.headers.authorization){
+			const token = req.headers.authorization.split(' ')[1]		
+			const signingKey = await getSigningKey(token);
+			const options = { ignoreExpiration: false, maxAge : '10h', algorithms: ['RS256'] };
+			const claimPath = process.env.AccessClaimPath;
+			jwt.verify(token, signingKey, options, function(err, vdecoded) {
+					if(err){
+						console.log(err);
+						throw new Error('Unable to verify token');
+					}
+					req.userData = vdecoded;
+					req.userAccess = vdecoded[claimPath];
+					// Check Roles at least one role is present process.env.AccessReadRole, process.env.AccessWriteRole, process.env.AccessAdminRole
+					if(req.userAccess.indexOf(process.env.AccessReadRole) === -1 && req.userAccess.indexOf(process.env.AccessWriteRole) === -1 && req.userAccess.indexOf(process.env.AccessAdminRole) === -1){
+						throw new Error('Roles not found');
+					}
+				});
+			
+			next();
+		} else {
+			throw(new Error('Authorisation header missing'))
+		}
         
     } catch (err) {
 		console.log(err);
