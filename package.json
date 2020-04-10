@@ -16,16 +16,16 @@
   "license": "GPL-3.0",
   "dependencies": {
     "cors": "^2.8.5",
-    "custom-env": "^1.0.2",
+    "custom-env": "^2.0.1",
     "express": "^4.17.1",
     "jsonwebtoken": "^8.5.1",
-    "jwks-rsa": "^1.6.0",
+    "jwks-rsa": "^1.7.0",
     "mime": "^2.4.4",
-    "minio": "^7.0.12",
+    "minio": "^7.0.15",
     "multiparty": "^4.2.1",
-    "uuid": "^3.3.3"
+    "uuid": "^7.0.3"
   },
   "devDependencies": {
-    "nodemon": "^2.0.2"
+    "nodemon": "^2.0.3"
   }
 }
