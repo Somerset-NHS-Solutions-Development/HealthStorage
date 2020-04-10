@@ -4,7 +4,7 @@ const fs = require("fs");
 const express = require('express');
 const multiparty = require('multiparty');
 const router = express.Router()
-const uuidv4 = require('uuid/v4');
+const { v4 } = require('uuid');
 const Minio = require('minio')
 const mime = require('mime');
 
@@ -397,7 +397,7 @@ const formPutResult = async (req,res,next) => {
 			};
 			
 			
-			const newGUID = uuidv4();
+			const newGUID = v4();
 			const url = req.protocol + '://' + req.get('host') + '/storage/retrieve/'+subjectId+'/'+newGUID;
 			const region = '';
 			
