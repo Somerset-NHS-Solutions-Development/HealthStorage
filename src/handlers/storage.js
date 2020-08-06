@@ -20,13 +20,17 @@ const client = new Minio.Client({
     port: Number(process.env.MinIO_port),
     useSSL: Boolean(process.env.MinIO_useSSL),
     accessKey: process.env.MinIO_accessKey,
-    secretKey: process.env.MinIO_secretKey
+    secretKey: process.env.MinIO_secretKey,
+	region: process.env.MinIO_DefaultRegion
 })
 
 // Functions
 
 function makeBucket(name, region = '') {
 	return new Promise(function(resolve, reject){
+		if(region === '') {
+			region = process.env.MinIO_DefaultRegion; // Default
+		}
 		try {
 			client.makeBucket(name, region, function(err) {
 				if (err) {
@@ -34,9 +38,7 @@ function makeBucket(name, region = '') {
 					resolve(false);
 				}
 				
-				if(region === '') {
-					region = 'Default';
-				}
+				
 				console.log('Bucket created successfully in '+region+'.');
 				resolve(true);
 			});
@@ -237,11 +239,11 @@ function mergeBucket(src,dst,urlPart) {
 									if (err) throw err;
 									console.log(cachedFile+' was deleted');
 									
-								);
+								});
 								
 								await client.removeObject(src, file, function(err) {
 									if (err) throw err;
-								})
+								});
 								
 								returnData.push({
 									status : 'success',
