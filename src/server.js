@@ -56,4 +56,4 @@ server.get('/', (req, res) => {
 server.listen(process.env.listenOn, () => {
 		console.log('Platform: '+process.platform);
 		console.log('Listening on port '+process.env.listenOn);
-	})    
+	})

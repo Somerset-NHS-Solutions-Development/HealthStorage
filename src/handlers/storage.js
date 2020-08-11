@@ -37,8 +37,8 @@ function makeBucket(name, region = '') {
 					console.log(err);
 					resolve(false);
 				}
-				
-				
+
+
 				console.log('Bucket created successfully in '+region+'.');
 				resolve(true);
 			});
@@ -54,7 +54,7 @@ function checkBucketExists(name) {
 			client.bucketExists(name, function(err, exists) {
 				if (err) {
 					resolve(false);
-				} 
+				}
 				if (exists) {
 					resolve(true);
 				}
@@ -75,7 +75,7 @@ function statobject(bucket, file) {
 				reject(err);
 			}
 			console.log(stat);
-			resolve(stat);				
+			resolve(stat);
 		})
 		} catch(err) {
 			reject(err);
@@ -111,7 +111,7 @@ function getobjectToCache(bucket, file) {
 		try {
 			if(process.env.cacheDirectory){
 				let tmpFile = String(process.env.cacheDirectory)+'\\'+file;
-				
+
 				if(process.platform === "win32"){
 					tmpFile = tmpFile.replace('/','\\');
 				} else {
@@ -119,7 +119,7 @@ function getobjectToCache(bucket, file) {
 				}
 				// console.log(tmpFile);
 				const fileStream = fs.createWriteStream(tmpFile);
-				
+
 				client.getObject(bucket, file, function(err,dataStream) {
 					if (err) {
 						fileStream.destroy();
@@ -132,7 +132,7 @@ function getobjectToCache(bucket, file) {
 					dataStream.on('data', function(chunk) {
 						// size += chunk.length
 					})
-				  
+
 					dataStream.on('end', function() {
 						//console.log('End. Total size = ' + size)
 						resolve(tmpFile);
@@ -143,9 +143,9 @@ function getobjectToCache(bucket, file) {
 					})
 					dataStream.pipe(fileStream);
 				});
-				
+
 				resolve(tmpFile);
-				
+
 			} else {
 				reject(new Error('No Cache directory Set'));
 			}
@@ -159,22 +159,22 @@ function bucketObjectList(bucket) {
     return new Promise((resolve, reject) => {
 		try {
 			let objects = [];
-			let objectsStream = client.listObjectsV2(bucket,'', true,'');		
-			objectsStream.on('data',async function(obj) {	
+			let objectsStream = client.listObjectsV2(bucket,'', true,'');
+			objectsStream.on('data',async function(obj) {
 				objects.push(obj.name)
 			})
 			objectsStream.on('error', function(err) {
 				console.log(err)
 				reject(err);
-			})		
+			})
 			objectsStream.on('end', function() {
 				resolve(objects);
-				
+
 			});
 		} catch(err) {
 			reject(err);
 		}
-		
+
     });
 }
 
@@ -196,7 +196,7 @@ function mergeBucket(src,dst,urlPart) {
 		try{
 			let returnData = [];
 			const srcFiles = await bucketObjectList(src);
-			console.log(srcFiles);
+			console.log('Souurce Files:', srcFiles);
 			for(file of srcFiles){
 				console.log('File: '+file);
 				const fileInfo = await statobject(src,file);
@@ -205,16 +205,16 @@ function mergeBucket(src,dst,urlPart) {
 					if(fileInfo.metaData.previousSubjectIDs) {
 						previousSubjectIDs = fileInfo.metaData.previousSubjectIDs;
 					}
-					previousSubjectIDs.push(fileInfo.metaData.subjectid)					
+					previousSubjectIDs.push(fileInfo.metaData.subjectid)
 					const metaData = {
 							'Content-Type': fileInfo.metaData['content-type'],
 							'SubjectId': dst,
 							'previousSubjectIDs': previousSubjectIDs
-					};					
+					};
 					let exists = await checkBucketExists(dst);
 					if(exists === false){
-						await makeBucket(dst, region);				
-					} 
+						await makeBucket(dst, region);
+					}
 					exists = await checkBucketExists(dst);
 					if(exists === false){
 						reject(new Error('Unable to create bucket'));
@@ -229,22 +229,22 @@ function mergeBucket(src,dst,urlPart) {
 							  console.log(err, etag) // err should be null
 							})
 							*/
-							
+
 							const etag = await putFileObject(dst,file,cachedFile,metaData);
-							
+
 							const dstfileInfo = await statobject(dst,file);
-							
+
 							if(dstfileInfo){
 								fs.unlink(cachedFile, (err) => {
 									if (err) throw err;
 									console.log(cachedFile+' was deleted');
-									
+
 								});
-								
+
 								await client.removeObject(src, file, function(err) {
 									if (err) throw err;
 								});
-								
+
 								returnData.push({
 									status : 'success',
 									fileName : file,
@@ -252,28 +252,26 @@ function mergeBucket(src,dst,urlPart) {
 									previoushref : prevUrl,
 									mimeType : fileInfo.metaData['content-type']
 								});
-								
+
 							} else {
 								throw(new Error('File not in destination, unable to continue'))
 							}
-							
-							
+
+
 						} catch (err) {
 							reject(err);
 						}
-						
+
 					}
 				} else {
 					throw(new Error('Unable to get object info'));
 				}
-				
+
 			}
 			resolve(returnData);
 		} catch(err) {
 			reject(err);
 		}
-		
-		
 	});
 }
 
@@ -293,7 +291,7 @@ const getFileStatResult = async (req,res,next) => {
 		}
 		res.end(JSON.stringify(stat));
 	})
-	
+
 	return;
 }
 
@@ -316,9 +314,9 @@ const getFileResult = async (req,res,next) => {
 		let contentType = 'application/octet-stream';
 		if(stat.metaData['content-type']){
 			contentType = stat.metaData['content-type'];
-		}		
+		}
 		const headers = {'Content-Type': contentType,'Content-Length': stat.size};
-		res.set(headers);		
+		res.set(headers);
 		client.getObject(req.params.bucket, req.params.file, function(err, dataStream) {
 		  if (err) {
 			//return console.log(err)
@@ -328,12 +326,12 @@ const getFileResult = async (req,res,next) => {
 		  dataStream.on('data', function(chunk) {
 			if(chunk){
 				miniData.push(chunk);
-				size += chunk.length				
-			}			
+				size += chunk.length
+			}
 		  })
 		  dataStream.on('end', function() {
 			res.end(Buffer.concat(miniData));
-			// console.log('End. Total size = ' + size)			
+			// console.log('End. Total size = ' + size)
 		  })
 		  dataStream.on('error', function(err) {
 			//console.log(err)
@@ -345,7 +343,7 @@ const getFileResult = async (req,res,next) => {
 		//res.send(miniData);
 		//res.end();
 	})
-	
+
 	return;
 }
 
@@ -362,13 +360,13 @@ const formPutResult = async (req,res,next) => {
 	let fileMetadata = {};
 	let subjectId = '';
 	let returnData = [];
-	
-	
+
+
 	form.on('error', function(err) {
 	  res.status(500).json(err);
 	  return res.end();
 	});
-	
+
 	form.on('field', function(name, value) {
 		if(name === 'metadata') {
 			fileMetadata = value;
@@ -397,16 +395,16 @@ const formPutResult = async (req,res,next) => {
 				'Content-Type': contentType,
 				'SubjectId': subjectId
 			};
-			
-			
+
+
 			const newGUID = uuidv4();
 			const url = req.protocol + '://' + req.get('host') + '/storage/retrieve/'+subjectId+'/'+newGUID;
 			const region = '';
-			
+
 			let exists = await checkBucketExists(subjectId);
 			if(exists === false){
-				await makeBucket(subjectId, region);				
-			} 
+				await makeBucket(subjectId, region);
+			}
 			exists = await checkBucketExists(subjectId);
 			if(exists === false){
 				console.log('Unable to upload due to bucket not existing and unable to create bucket.')
@@ -427,13 +425,13 @@ const formPutResult = async (req,res,next) => {
 					href : url,
 					mimeType : contentType
 				});
-			}			
+			}
 			part.resume();
 		}
 
 		part.on('error', function(err) {
 			res.status(500).json(err);
-			return res.end();			
+			return res.end();
 		});
 	});
 
@@ -463,8 +461,8 @@ const adminBucketListResult = async (req,res,next) => {
 		let stat = await statobject(req.params.bucket, obj);
 		objectData.push({"name" : obj, "stat" : stat})
 	}
-	res.end(JSON.stringify(objectData));  	
-	
+	res.end(JSON.stringify(objectData));
+
 	return;
 }
 
@@ -477,9 +475,9 @@ const adminBucketsResult = async (req,res,next) => {
 		return;
 	}
 	let buckets = await bucketList();
-	
-	res.end(JSON.stringify(buckets));  	
-	
+
+	res.end(JSON.stringify(buckets));
+
 	return;
 }
 
@@ -495,10 +493,19 @@ const adminMergeBucketsResult = async (req,res,next) => {
 	const dst = req.params.dstbucket
 	console.log('Source: ' + src + ' Destination: ' + dst);
 	const urlPart = req.protocol + '://' + req.get('host') + '/storage/retrieve/';
-	const mergeResultData = await mergeBucket(src,dst,urlPart);
-	
-	res.end(JSON.stringify(mergeResultData));  	
-	
+	try {
+		const mergeResultData = await mergeBucket(src,dst,urlPart);
+		res.end(JSON.stringify(mergeResultData));
+	} catch(err) {
+		return res.status(500).json({
+			message: 'Exception in mergeBucket',
+			error: err
+		});
+	}
+
+
+
+
 	return;
 }
 
