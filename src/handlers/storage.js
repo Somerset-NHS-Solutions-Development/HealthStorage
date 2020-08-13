@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken')
 const verifyToken = require('./verify-token');
 const fs = require("fs");
+const path = require("path");
 const express = require('express');
 const multiparty = require('multiparty');
 const router = express.Router()
@@ -74,7 +75,7 @@ function statobject(bucket, file) {
 				console.log(err)
 				reject(err);
 			}
-			console.log(stat);
+			console.log('sta: ', stat);
 			resolve(stat);
 		})
 		} catch(err) {
@@ -108,73 +109,90 @@ function putFileObject(bucket,dstfile,srcfile,metaData) {
 
 function getobjectToCache(bucket, file) {
     return new Promise((resolve, reject) => {
-		try {
-			if(process.env.cacheDirectory){
-				let tmpFile = String(process.env.cacheDirectory)+'\\'+file;
+			try {
+				if(process.env.cacheDirectory) {
+					let tmpFile = String(process.env.cacheDirectory)+'\\'+file;
 
-				if(process.platform === "win32"){
-					tmpFile = tmpFile.replace('/','\\');
-				} else {
-					tmpFile = tmpFile.replace('\\','/');
-				}
-				// console.log(tmpFile);
-				const fileStream = fs.createWriteStream(tmpFile);
-
-				client.getObject(bucket, file, function(err,dataStream) {
-					if (err) {
-						fileStream.destroy();
-						reject(err);
+					if(process.platform === "win32"){
+						tmpFile = tmpFile.replace('/','\\');
+					} else {
+						tmpFile = tmpFile.replace('\\','/');
 					}
-					fileStream.on('error', ()=>{
-						dataStream.destroy();
-						reject();
+					console.log(tmpFile, ' normalzing...');
+
+					tmpFile = path.normalize(tmpFile);
+
+					console.log('normalized: ', tmpFile, ', creating stream');
+
+
+					const fileStream = fs.createWriteStream(tmpFile);
+					console.log('stream created');
+
+					fileStream.on('error', (err) => {
+						console.log('Error in FS: ', err);
+						return reject(err);
 					});
-					dataStream.on('data', function(chunk) {
-						// size += chunk.length
-					})
 
-					dataStream.on('end', function() {
-						//console.log('End. Total size = ' + size)
-						resolve(tmpFile);
-					})
-					dataStream.on('error', function(err) {
-						fileStream.destroy();
-						reject(err);
-					})
-					dataStream.pipe(fileStream);
-				});
+					client.getObject(bucket, file, ((err, dataStream) => {
+						if (err) {
+							fileStream.destroy();
+							console.log('Error in getting object', err);
+							return reject(err);
+						}
 
-				resolve(tmpFile);
+						let size = 0;
+						dataStream.on('data', ((chunk) => {
+							//console.log('chunky!');
+							size += chunk.length
+						}));
 
-			} else {
-				reject(new Error('No Cache directory Set'));
+						dataStream.on('end', (() => {
+							console.log('End. Total size = ' + size)
+							return resolve(tmpFile);
+						}));
+
+						dataStream.on('error', ((ex) => {
+							console.log('Error in DS: ', err);
+							return reject(err);
+						}));
+
+						dataStream.pipe(fileStream);
+					}));
+
+					return resolve(tmpFile);
+
+				} else {
+					reject(new Error('No Cache directory Set'));
+				}
+			} catch(err) {
+				reject(err);
 			}
-		} catch(err) {
-			reject(err);
-		}
-    });
+  	});
 }
 
 function bucketObjectList(bucket) {
     return new Promise((resolve, reject) => {
-		try {
-			let objects = [];
-			let objectsStream = client.listObjectsV2(bucket,'', true,'');
-			objectsStream.on('data',async function(obj) {
-				objects.push(obj.name)
-			})
-			objectsStream.on('error', function(err) {
-				console.log(err)
+			try {
+				let objects = [];
+				console.log('streaming bucket', bucket);
+				let objectsStream = client.listObjectsV2(bucket,'', true,'');
+				objectsStream.on('data',async function(obj) {
+					console.log('adding: ', obj.name);
+					objects.push(obj.name)
+				})
+				objectsStream.on('error', function(err) {
+					console.log(err)
+					reject(err);
+				})
+				objectsStream.on('end', function() {
+					console.log('end of stream!');
+					resolve(objects);
+
+				});
+			} catch(err) {
+				console.log('rejecting', err);
 				reject(err);
-			})
-			objectsStream.on('end', function() {
-				resolve(objects);
-
-			});
-		} catch(err) {
-			reject(err);
-		}
-
+			}
     });
 }
 
@@ -191,16 +209,38 @@ function bucketList() {
     });
 }
 
+function makeBucketIfNotExists(buck, region, tries = 0) {
+	if(!region) {
+		region = process.env.MinIO_DefaultRegion;
+	}
+	return checkBucketExists(buck).then((exists) => {
+		if(!exists && tries < 3) {
+			console.log('bucket does not exists, creating ', buck, ' at ', region);
+			makeBucket(buck, region).then(() => {
+				return makeBucketIfNotExists(buck, region, tries++);
+			}).catch((err) => {
+				throw Error(err);
+			});
+		} else {
+			return exists;
+		}
+	}).catch((err) => {
+		throw Error(err);
+	});
+}
+
 function mergeBucket(src,dst,urlPart) {
 	return new Promise(async (resolve, reject) => {
 		try{
 			let returnData = [];
+			console.log('getting object list from bucket');
 			const srcFiles = await bucketObjectList(src);
-			console.log('Souurce Files:', srcFiles);
+			console.log('Source Files:', srcFiles);
 			for(file of srcFiles){
-				console.log('File: '+file);
-				const fileInfo = await statobject(src,file);
-				if(fileInfo){
+				console.log('File: ' + file);
+				const fileInfo = await statobject(src, file);
+				console.log('Got stat object:', fileInfo);
+				if(fileInfo) {
 					let previousSubjectIDs = [];
 					if(fileInfo.metaData.previousSubjectIDs) {
 						previousSubjectIDs = fileInfo.metaData.previousSubjectIDs;
@@ -211,17 +251,20 @@ function mergeBucket(src,dst,urlPart) {
 							'SubjectId': dst,
 							'previousSubjectIDs': previousSubjectIDs
 					};
-					let exists = await checkBucketExists(dst);
+					console.log('sub meta: ', metaData);
+
+					let makeTry = 0;
+
+					let exists = makeBucketIfNotExists(dst);
 					if(exists === false){
-						await makeBucket(dst, region);
-					}
-					exists = await checkBucketExists(dst);
-					if(exists === false){
-						reject(new Error('Unable to create bucket'));
+						return reject(new Error('Unable to create bucket'));
 					} else {
+						console.log('creating cache');
 						const cachedFile = await getobjectToCache(src,file);
+						console.log('created ', cachedFile);
+
 						try {
-							await fs.promises.access(cachedFile);
+							await fs.promises.access(cachedFile, fs.constants.W_OK | fs.constants.R_OK);
 							const url = urlPart+dst+'/'+file;
 							const prevUrl = urlPart+src+'/'+file;
 							/*
@@ -398,7 +441,7 @@ const formPutResult = async (req,res,next) => {
 
 
 			const newGUID = uuidv4();
-			const url = req.protocol + '://' + req.get('host') + '/storage/retrieve/'+subjectId+'/'+newGUID;
+			const url = req.protocol + '://' + req.get('host') + '/storage/file/'+subjectId+'/'+newGUID;
 			const region = '';
 
 			let exists = await checkBucketExists(subjectId);
@@ -511,6 +554,10 @@ const adminMergeBucketsResult = async (req,res,next) => {
 
 
 // Routes
+
+router.post('/file', verifyToken, asyncMiddleware(formPutResult));
+router.get('/file/:bucket/:file', verifyToken, asyncMiddleware(getFileResult));
+router.get('/file/meta/:bucket/:file', verifyToken, asyncMiddleware(getFileStatResult));
 
 router.put('/put', verifyToken, asyncMiddleware(formPutResult));
 
