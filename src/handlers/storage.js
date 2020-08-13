@@ -118,15 +118,15 @@ function getobjectToCache(bucket, file) {
 					} else {
 						tmpFile = tmpFile.replace('\\','/');
 					}
-					console.log(tmpFile, ' normalzing...');
+					//console.log(tmpFile, ' normalzing...');
 
 					tmpFile = path.normalize(tmpFile);
 
-					console.log('normalized: ', tmpFile, ', creating stream');
+					//console.log('normalized: ', tmpFile, ', creating stream');
 
 
 					const fileStream = fs.createWriteStream(tmpFile);
-					console.log('stream created');
+					//console.log('stream created');
 
 					fileStream.on('error', (err) => {
 						console.log('Error in FS: ', err);
@@ -174,10 +174,10 @@ function bucketObjectList(bucket) {
     return new Promise((resolve, reject) => {
 			try {
 				let objects = [];
-				console.log('streaming bucket', bucket);
+				//console.log('streaming bucket', bucket);
 				let objectsStream = client.listObjectsV2(bucket,'', true,'');
 				objectsStream.on('data',async function(obj) {
-					console.log('adding: ', obj.name);
+					//console.log('adding: ', obj.name);
 					objects.push(obj.name)
 				})
 				objectsStream.on('error', function(err) {
@@ -185,7 +185,7 @@ function bucketObjectList(bucket) {
 					reject(err);
 				})
 				objectsStream.on('end', function() {
-					console.log('end of stream!');
+					//console.log('end of stream!');
 					resolve(objects);
 
 				});
@@ -233,13 +233,13 @@ function mergeBucket(src,dst,urlPart) {
 	return new Promise(async (resolve, reject) => {
 		try{
 			let returnData = [];
-			console.log('getting object list from bucket');
+			//console.log('getting object list from bucket');
 			const srcFiles = await bucketObjectList(src);
-			console.log('Source Files:', srcFiles);
+			//console.log('Source Files:', srcFiles);
 			for(file of srcFiles){
-				console.log('File: ' + file);
+				//console.log('File: ' + file);
 				const fileInfo = await statobject(src, file);
-				console.log('Got stat object:', fileInfo);
+				//console.log('Got stat object:', fileInfo);
 				if(fileInfo) {
 					let previousSubjectIDs = [];
 					if(fileInfo.metaData.previousSubjectIDs) {
@@ -259,19 +259,14 @@ function mergeBucket(src,dst,urlPart) {
 					if(exists === false){
 						return reject(new Error('Unable to create bucket'));
 					} else {
-						console.log('creating cache');
+						//console.log('creating cache');
 						const cachedFile = await getobjectToCache(src,file);
-						console.log('created ', cachedFile);
+						//console.log('created ', cachedFile);
 
 						try {
 							await fs.promises.access(cachedFile, fs.constants.W_OK | fs.constants.R_OK);
 							const url = urlPart+dst+'/'+file;
 							const prevUrl = urlPart+src+'/'+file;
-							/*
-							await client.fPutObject(dst, file, cachedFile, metaData, function(err, etag) {
-							  console.log(err, etag) // err should be null
-							})
-							*/
 
 							const etag = await putFileObject(dst,file,cachedFile,metaData);
 
@@ -280,7 +275,7 @@ function mergeBucket(src,dst,urlPart) {
 							if(dstfileInfo){
 								fs.unlink(cachedFile, (err) => {
 									if (err) throw err;
-									console.log(cachedFile+' was deleted');
+									//console.log(cachedFile+' was deleted');
 
 								});
 
