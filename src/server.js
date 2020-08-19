@@ -19,11 +19,16 @@ if(process.env.corsEnabled.toLowerCase() === 'true'){
 	} else {
 		whitelist.push(process.env.allowedOrigins);
 	}
-	// console.log(whitelist)
+
+	console.log('Current acceptable CORS addresses: ', whitelist)
 	corsOptions = {
 	  origin: function (origin, callback) {
-		// console.log(origin);
-		if (whitelist.indexOf(origin) !== -1) {
+		console.log('origin: ', origin);
+		const index = whitelist.findIndex((w) => {
+			return origin && origin.startsWith(w);
+		})
+
+		if (index > -1) {
 			callback(null, true);
 		} else {
 			callback(new Error('CORS failed'));
