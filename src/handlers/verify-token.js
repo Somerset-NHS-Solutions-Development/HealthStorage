@@ -36,6 +36,9 @@ module.exports = async (req, res, next) => {
 							console.log(err);
 							throw new Error('Unable to verify token');
 						}
+
+						// console.log('Checking userAccess', vdecoded);
+
 						req.userData = vdecoded;
 						req.userAccess = vdecoded[claimPath];
 						// Check Roles at least one role is present process.env.AccessReadRole, process.env.AccessWriteRole, process.env.AccessAdminRole

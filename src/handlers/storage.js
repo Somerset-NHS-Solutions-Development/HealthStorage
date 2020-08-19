@@ -8,6 +8,7 @@ const router = express.Router()
 const uuidv4 = require('uuid/v4');
 const Minio = require('minio')
 const mime = require('mime');
+const url = require('url');
 
 // Asynch Middleware
 const asyncMiddleware = fn => (req, res, next) => {
@@ -52,6 +53,7 @@ function makeBucket(name, region = '') {
 function checkBucketExists(name) {
 	return new Promise(function(resolve, reject){
 		try {
+			console.log('Looking for bucked... ', name);
 			client.bucketExists(name, function(err, exists) {
 				if (err) {
 					resolve(false);
@@ -209,11 +211,12 @@ function bucketList() {
     });
 }
 
-function makeBucketIfNotExists(buck, region, tries = 0) {
+async function makeBucketIfNotExists(buck, region, tries = 0) {
 	if(!region) {
 		region = process.env.MinIO_DefaultRegion;
 	}
-	return checkBucketExists(buck).then((exists) => {
+	console.log('Checking if bucket "', buck, '" exists');
+	return await checkBucketExists(buck).then((exists) => {
 		if(!exists && tries < 3) {
 			console.log('bucket does not exists, creating ', buck, ' at ', region);
 			makeBucket(buck, region).then(() => {
@@ -225,6 +228,7 @@ function makeBucketIfNotExists(buck, region, tries = 0) {
 			return exists;
 		}
 	}).catch((err) => {
+		console.log('error making bucket:', err);
 		throw Error(err);
 	});
 }
@@ -255,7 +259,8 @@ function mergeBucket(src,dst,urlPart) {
 
 					let makeTry = 0;
 
-					let exists = makeBucketIfNotExists(dst);
+					console.log('making bucket if it does not exist:', dst);
+					let exists = await makeBucketIfNotExists(dst);
 					if(exists === false){
 						return reject(new Error('Unable to create bucket'));
 					} else {
@@ -411,70 +416,101 @@ const formPutResult = async (req,res,next) => {
 		}
 		if(name === 'subjectId') {
 			subjectId = value;
+			if(subjectId.trim().length === 0) {
+				if(process.env.use_fallback_bucket.trim().toLowerCase() !== 'true') {
+					return res.status(400).json({
+						status : 'failed',
+						error: 'SubjectId is empty'
+					});
+				}
+				subjectId = process.env.fallback_bucket.trim();
+			}
 		}
     });
 
 	// Parts are emitted when parsing the form
-	form.on('part', async function(part) {
+	form.on('part', async (part) => {
 		// You *must* act on the part by reading it, if you want to ignore it, just call "part.resume()"
 		if (!part.filename) {
 			// filename is not defined when this is a field and not a file
 			part.resume();
-		}
-		if (part.filename) {
-			// filename is defined when this is a file
-			count++;
-			const fileExt = part.filename.split('.').pop();
-			let contentType = mime.getType(fileExt);
-			if(typeof contentType === "undefined"){
-				contentType = 'application/octet-stream';
-			}
-			const metaData = {
-				'Content-Type': contentType,
-				'SubjectId': subjectId
-			};
-
-
-			const newGUID = uuidv4();
-			const url = req.protocol + '://' + req.get('host') + '/storage/file/'+subjectId+'/'+newGUID;
-			const region = '';
-
-			let exists = await checkBucketExists(subjectId);
-			if(exists === false){
-				await makeBucket(subjectId, region);
-			}
-			exists = await checkBucketExists(subjectId);
-			if(exists === false){
-				console.log('Unable to upload due to bucket not existing and unable to create bucket.')
-				returnData.push({
-					status : 'failed',
-					field : part.name,
-					filename : part.filename,
-					error: 'Unable to upload due to bucket not existing and unable to create bucket.'
-				});
-			} else {
-				await client.putObject(subjectId, newGUID, part, metaData, function(err, etag) {
-				  console.log(err, etag) // err should be null
-				})
-				returnData.push({
-					status : 'success',
-					field : part.name,
-					fileName : part.filename,
-					href : url,
-					mimeType : contentType
-				});
-			}
-			part.resume();
+			return;
 		}
 
 		part.on('error', function(err) {
 			res.status(500).json(err);
 			return res.end();
 		});
+
+		// filename is defined when this is a file
+		count++;
+		const fileExt = part.filename.split('.').pop();
+
+		let contentType = part.headers['content-type'];
+		if(!contentType) {
+			contentType = mime.getType(fileExt);
+			if(!contentType) {
+				contentType = 'application/octet-stream';
+			}
+		}
+
+		const metaData = {
+			'Content-Type': contentType,
+			'SubjectId': subjectId
+		};
+
+		if(subjectId.trim().length === 0) {
+			if(process.env.use_fallback_bucket.trim().toLowerCase() !== 'true') {
+				return res.status(400).json({
+					status : 'failed',
+					error: 'SubjectId is empty'
+				});
+			}
+			subjectId = process.env.fallback_bucket.trim();
+		}
+
+
+		const newGUID = uuidv4();
+
+		console.log('Req: ', req);
+
+		const url = req.protocol + [':/', process.env.host.trim(), 'storage/file', subjectId, newGUID].join('/');
+		const region = '';
+
+		console.log('FormPutResult: checking if bucket exists:', subjectId)
+		let exists = false;
+		try {
+			exists = await makeBucketIfNotExists(subjectId);
+		} catch(ex) {
+			console.log('Exception checking if bucket exists, or creating it: ', ex);
+		}
+		console.log('bucket exists? ', exists);
+		if(exists === false){
+			console.log('Unable to upload due to bucket not existing and unable to create bucket.')
+			returnData.push({
+				status : 'failed',
+				field : part.name,
+				filename : part.filename,
+				error: 'Unable to upload due to bucket not existing and unable to create bucket.'
+			});
+		} else {
+			await client.putObject(subjectId, newGUID, part, metaData, function(err, etag) {
+			  console.log('err: ', err, 'etag:', etag) // err should be null
+			})
+			returnData.push({
+				status : 'success',
+				field : part.name,
+				fileName : part.filename,
+				href : url,
+				mimeType : contentType
+			});
+		}
+		part.resume();
 	});
 
 	// Close emitted after form parsed
 	form.on('close', function() {
+		console.log('Closing Form');
 		res.end(JSON.stringify({'subjectId':subjectId,'files':returnData}));
 	});
 
@@ -530,6 +566,9 @@ const adminMergeBucketsResult = async (req,res,next) => {
 	const src = req.params.srcbucket;
 	const dst = req.params.dstbucket
 	console.log('Source: ' + src + ' Destination: ' + dst);
+
+	console.log('req', req);
+
 	const urlPart = req.protocol + '://' + req.get('host') + '/storage/retrieve/';
 	try {
 		const mergeResultData = await mergeBucket(src,dst,urlPart);
