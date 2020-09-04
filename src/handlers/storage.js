@@ -318,6 +318,13 @@ function mergeBucket(src,dst,urlPart) {
 	});
 }
 
+function buildHRef(protocol, subjectId, newGUID = null) {
+	if(!newGUID) {
+		return protocol + [':/', process.env.host.trim(), 'storage/file', subjectId].join('/');
+	}
+	return protocol + [':/', process.env.host.trim(), 'storage/file', subjectId, newGUID].join('/');
+}
+
 const getFileStatResult = async (req,res,next) => {
 	if(req.userAccess.indexOf(process.env.AccessReadRole) === -1){ // Make this confirgurable
 		res.status(401).json({
@@ -332,7 +339,17 @@ const getFileStatResult = async (req,res,next) => {
 			res.status(500).json(err);
 			return res.end();
 		}
-		res.end(JSON.stringify(stat));
+
+		// console.log(stat);
+
+		let meta = {};
+		meta.mimeType = stat.metaData['content-type'];
+		meta.href = buildHRef(req.protocol, stat.metaData.subjectid);
+		meta.filename = '';
+		meta.size = stat.size;
+		meta.resourceId = stat.metaData.subjectid;
+
+		res.status(200).json(meta);
 	})
 
 	return;
@@ -362,25 +379,28 @@ const getFileResult = async (req,res,next) => {
 		res.set(headers);
 		client.getObject(req.params.bucket, req.params.file, function(err, dataStream) {
 		  if (err) {
-			//return console.log(err)
-			res.status(500).json(err);
-			return res.end();
+				res.status(500).json(err);
+				return res.end();
 		  }
+
 		  dataStream.on('data', function(chunk) {
-			if(chunk){
-				miniData.push(chunk);
-				size += chunk.length
-			}
-		  })
+				if(chunk) {
+					miniData.push(chunk);
+					size += chunk.length
+				}
+		  });
+
 		  dataStream.on('end', function() {
-			res.end(Buffer.concat(miniData));
-			// console.log('End. Total size = ' + size)
-		  })
+				res.end(Buffer.concat(miniData));
+				// console.log('End. Total size = ' + size)
+		  });
+
 		  dataStream.on('error', function(err) {
-			//console.log(err)
-			res.status(500).json(err);
-			return res.end();
-		  })
+				//console.log(err)
+				res.status(500).json(err);
+				return res.end();
+		  });
+
 		  return;
 		})
 		//res.send(miniData);
@@ -402,7 +422,10 @@ const formPutResult = async (req,res,next) => {
 	let count = 0;
 	let fileMetadata = {};
 	let subjectId = '';
+	let flatData = {};
 	let returnData = [];
+
+	let size = 0;
 
 
 	form.on('error', function(err) {
@@ -469,10 +492,11 @@ const formPutResult = async (req,res,next) => {
 			subjectId = process.env.fallback_bucket.trim();
 		}
 
+		size = size <= part.byteCount ?  part.byteCount : size;
 
 		const newGUID = uuidv4();
 
-		console.log('Req: ', req);
+		// console.log('Req: ', req);
 
 		const url = req.protocol + [':/', process.env.host.trim(), 'storage/file', subjectId, newGUID].join('/');
 		const region = '';
@@ -490,20 +514,25 @@ const formPutResult = async (req,res,next) => {
 			returnData.push({
 				status : 'failed',
 				field : part.name,
-				filename : part.filename,
+				fileName : part.filename,
 				error: 'Unable to upload due to bucket not existing and unable to create bucket.'
 			});
 		} else {
 			await client.putObject(subjectId, newGUID, part, metaData, function(err, etag) {
 			  console.log('err: ', err, 'etag:', etag) // err should be null
 			})
-			returnData.push({
+
+			flatData = {
 				status : 'success',
+				mimeType: contentType,
+				href: buildHRef(req.protocol, subjectId, newGUID),
 				field : part.name,
-				fileName : part.filename,
-				href : url,
-				mimeType : contentType
-			});
+				fileName: part.filename,
+				size: part.byteOffset,
+				resourceId: newGUID
+			};
+
+			returnData.push(flatData);
 		}
 		part.resume();
 	});
@@ -511,7 +540,20 @@ const formPutResult = async (req,res,next) => {
 	// Close emitted after form parsed
 	form.on('close', function() {
 		console.log('Closing Form');
-		res.end(JSON.stringify({'subjectId':subjectId,'files':returnData}));
+		if(returnData.length > 1) {
+			console.log('content size: ', size);
+			returnData = returnData.reverse().map((r) => {
+				size  = size - r.size
+				r.size = size;
+				return r;
+			}).reverse();
+
+			res.end(JSON.stringify(returnData));
+		} else {
+			flatData.size = size - flatData.size;
+			res.end(JSON.stringify(flatData));
+		}
+
 	});
 
 	// Parse req
