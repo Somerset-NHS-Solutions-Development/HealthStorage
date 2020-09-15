@@ -320,9 +320,9 @@ function mergeBucket(src,dst,urlPart) {
 
 function buildHRef(protocol, subjectId, newGUID = null) {
 	if(!newGUID) {
-		return protocol + [':/', process.env.host.trim(), 'storage/file', subjectId].join('/');
+		return ['https:/', process.env.host.trim(), 'gateway/storage/file', subjectId].join('/');
 	}
-	return protocol + [':/', process.env.host.trim(), 'storage/file', subjectId, newGUID].join('/');
+	return ['https:/', process.env.host.trim(), 'gateway/storage/file', subjectId, newGUID].join('/');
 }
 
 const getFileStatResult = async (req,res,next) => {
@@ -496,9 +496,6 @@ const formPutResult = async (req,res,next) => {
 
 		const newGUID = uuidv4();
 
-		// console.log('Req: ', req);
-
-		const url = req.protocol + [':/', process.env.host.trim(), 'storage/file', subjectId, newGUID].join('/');
 		const region = '';
 
 		console.log('FormPutResult: checking if bucket exists:', subjectId)
