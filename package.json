@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "set NODE_ENV=development && nodemon --max-http-header-size 10000 src/server.js",
     "start": "set NODE_ENV=production && nodemon --max-http-header-size 10000 src/server.js",
+		"devlinux": "export NODE_ENV=development && nodemon --max-http-header-size 10000 src/server.js",
+		"startlinux": "export NODE_ENV=production && nodemon --max-http-header-size 10000 src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -20,6 +22,7 @@
     "express": "^4.17.1",
     "jsonwebtoken": "^8.5.1",
     "jwks-rsa": "^1.6.0",
+    "lodash": "^4.17.20",
     "mime": "^2.4.4",
     "minio": "^7.0.12",
     "multiparty": "^4.2.1",

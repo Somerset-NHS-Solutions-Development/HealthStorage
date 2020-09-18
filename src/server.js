@@ -1,4 +1,12 @@
-require('custom-env').env('development');
+// custom-env wouldn't load direct from NODE_ENV for some reason
+if(process.env.NODE_ENV.trim().toLowerCase() === 'production') {
+	require('custom-env').env('production');
+} else {
+	require('custom-env').env('development');
+}
+
+console.log(`Running in ${process.env.NODE_ENV} mode!`);
+
 const Minio = require('minio');
 
 // Express HTTP server

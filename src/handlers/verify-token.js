@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const _ = require('lodash');
 
 // Verify using getKey callback
 // Uses https://github.com/auth0/node-jwks-rsa as a way to fetch the keys.
@@ -40,7 +41,10 @@ module.exports = async (req, res, next) => {
 						// console.log('Checking userAccess', vdecoded);
 
 						req.userData = vdecoded;
-						req.userAccess = vdecoded[claimPath];
+
+						req.userAccess = _.get(vdecoded, claimPath);
+						//console.log('userAccess', req.userAccess, ', access claim: ', claimPath);
+						//req.userAccess = vdecoded[claimPath];
 						// Check Roles at least one role is present process.env.AccessReadRole, process.env.AccessWriteRole, process.env.AccessAdminRole
 						if(req.userAccess.indexOf(process.env.AccessReadRole) === -1 && req.userAccess.indexOf(process.env.AccessWriteRole) === -1 && req.userAccess.indexOf(process.env.AccessAdminRole) === -1){
 							throw new Error('Roles not found');

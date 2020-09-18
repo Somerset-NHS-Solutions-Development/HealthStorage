@@ -335,7 +335,11 @@ const getFileStatResult = async (req,res,next) => {
 	}
 	client.statObject(req.params.bucket, req.params.file, function(err, stat) {
 		if (err) {
-			console.log(err)
+			console.log(err);
+			if(err.code && err.code == "NotFound") {
+				return res.status(404).end();
+			}
+
 			res.status(500).json(err);
 			return res.end();
 		}
@@ -366,6 +370,10 @@ const getFileResult = async (req,res,next) => {
 	client.statObject(req.params.bucket, req.params.file, function(err, stat) {
 		if (err) {
 			console.log(err)
+			if(err.code && err.code == "NotFound") {
+				return res.status(404).end();
+			}
+
 			res.status(500).json(err);
 			return res.end();
 		}
