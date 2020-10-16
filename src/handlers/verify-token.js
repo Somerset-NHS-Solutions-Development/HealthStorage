@@ -24,8 +24,8 @@ async function getSigningKey(token) {
 		});
 	});
 }
-
 module.exports = async (req, res, next) => {
+		console.log('Verifying...');
     try {
 			if(req.headers.authorization){
 				const token = req.headers.authorization.split(' ')[1]
@@ -42,7 +42,26 @@ module.exports = async (req, res, next) => {
 
 						req.userData = vdecoded;
 
-						req.userAccess = _.get(vdecoded, claimPath);
+						let access = null;
+						const aClaims = claimPath.split(',').map((c) => {
+							return c.trim();
+						});
+
+						for(let i = 0; i < aClaims.length; i++) {
+							console.log('Claims: ', aClaims[i]);
+							claim = aClaims[i];
+							access = _.get(vdecoded, claim);
+							if(access != null) {
+								console.log('Got one!');
+								break;
+							}
+						}
+
+						if(!access) {
+							throw Error('Claims Path could not be found');
+						}
+
+						req.userAccess = access;
 						//console.log('userAccess', req.userAccess, ', access claim: ', claimPath);
 						//req.userAccess = vdecoded[claimPath];
 						// Check Roles at least one role is present process.env.AccessReadRole, process.env.AccessWriteRole, process.env.AccessAdminRole

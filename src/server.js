@@ -7,6 +7,8 @@ if(process.env.NODE_ENV.trim().toLowerCase() === 'production') {
 
 console.log(`Running in ${process.env.NODE_ENV} mode!`);
 
+console.log('Running on ', process.env.host);
+
 const Minio = require('minio');
 
 // Express HTTP server

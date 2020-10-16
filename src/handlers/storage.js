@@ -220,7 +220,7 @@ async function makeBucketIfNotExists(buck, region, tries = 0) {
 		if(!exists && tries < 3) {
 			console.log('bucket does not exists, creating ', buck, ' at ', region);
 			makeBucket(buck, region).then(() => {
-				return makeBucketIfNotExists(buck, region, tries++);
+				return makeBucketIfNotExists(buck, region, ++tries);
 			}).catch((err) => {
 				throw Error(err);
 			});
@@ -419,6 +419,7 @@ const getFileResult = async (req,res,next) => {
 }
 
 const formPutResult = async (req,res,next) => {
+
 	if(req.userAccess.indexOf(process.env.AccessWriteRole) === -1){ // Make this confirgurable
 		res.status(401).json({
 			message: "Authorisation failed."
@@ -426,6 +427,7 @@ const formPutResult = async (req,res,next) => {
 		res.end();
 		return;
 	}
+	
 	const form = new multiparty.Form();
 	let count = 0;
 	let fileMetadata = {};
@@ -633,8 +635,17 @@ const adminMergeBucketsResult = async (req,res,next) => {
 	return;
 }
 
+const testStorageEndpoint = async (req,res,next) => {
+	console.log('testing storage');
+	res.status(200).json({
+		message: 'Storage Endpoint Working'
+	});
+};
+
 
 // Routes
+
+router.get('/test', verifyToken, asyncMiddleware(testStorageEndpoint));
 
 router.post('/file', verifyToken, asyncMiddleware(formPutResult));
 router.get('/file/:bucket/:file', verifyToken, asyncMiddleware(getFileResult));
