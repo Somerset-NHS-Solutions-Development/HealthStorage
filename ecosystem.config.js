@@ -2,7 +2,7 @@ module.exports = {
   apps : [{
     name: 'health-storage',
 		cwd: __dirname,
-    script: 'srv/server.js',
+    script: 'src/server.js',
 		args: '--max-http-header-size=15000',
     instances: 1,
     autorestart: true,
