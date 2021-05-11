@@ -22,7 +22,7 @@
     "express": "^4.17.1",
     "jsonwebtoken": "^8.5.1",
     "jwks-rsa": "^1.6.0",
-    "lodash": "^4.17.20",
+    "lodash": "^4.17.21",
     "mime": "^2.4.4",
     "minio": "^7.0.12",
     "multiparty": "^4.2.1",
