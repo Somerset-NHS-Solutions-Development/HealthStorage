@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const _ = require('lodash');
+const logger = require('./../utils/logger');
 
 // Verify using getKey callback
 // Uses https://github.com/auth0/node-jwks-rsa as a way to fetch the keys.
@@ -25,7 +26,7 @@ async function getSigningKey(token) {
 	});
 }
 module.exports = async (req, res, next) => {
-		console.log('Verifying...');
+		logger.debug('Verifying...');
     try {
 			if(req.headers.authorization){
 				const token = req.headers.authorization.split(' ')[1]
@@ -34,8 +35,8 @@ module.exports = async (req, res, next) => {
 				const claimPath = process.env.AccessClaimPath;
 				jwt.verify(token, signingKey, options, function(err, vdecoded) {
 						if(err){
-							console.log(err);
-							throw new Error('Unable to verify token');
+							logger.error('JWT Verify error: ' + err);
+							throw err;
 						}
 
 						// console.log('Checking userAccess', vdecoded);
@@ -48,11 +49,11 @@ module.exports = async (req, res, next) => {
 						});
 
 						for(let i = 0; i < aClaims.length; i++) {
-							console.log('Claims: ', aClaims[i]);
+							logger.debug('Claims: ' + aClaims[i]);
 							claim = aClaims[i];
 							access = _.get(vdecoded, claim);
 							if(access != null) {
-								console.log('Got one!');
+								logger.debug('Got one!');
 								break;
 							}
 						}

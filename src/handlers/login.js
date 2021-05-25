@@ -7,6 +7,8 @@ const querystring = require('querystring');
 const jwt = require('jsonwebtoken')
 const verifyToken = require('./verify-token');
 
+const logger = require('./../utils/logger');
+
 
 router.post('/login', (req, res) => {
     const user = req.body;
@@ -32,11 +34,15 @@ router.post('/login', (req, res) => {
 				'Content-Length': contentLength,
 			}
 		}
-		console.log('oid enpoint: ', process.env.openIDDirectAccessEnpoint);
+		logger.call('oid enpoint: ' + process.env.openIDDirectAccessEnpoint);
 		const reqs = https.request(process.env.openIDDirectAccessEnpoint, options, (ress) => {
 			ress.setEncoding('utf8');
 			ress.on('data', (d) => {
+				logger.call('OID Data: ' + (d ? d.length : 0));
 				const json = JSON.parse(d);
+				if(json.error && json.error.length != 0) {
+					return res.status(500).json(json);
+				}
 				var fred = jwt.decode(ress.access_token);
     		return res.status(200).json(json);
   		});
@@ -45,7 +51,7 @@ router.post('/login', (req, res) => {
 		reqs.on('error', (e) => {
 			return res.status(500).json({
 				message: 'Error loging in.',
-				error: error
+				error: e
 			})
 		});
 

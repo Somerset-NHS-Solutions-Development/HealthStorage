@@ -5,9 +5,11 @@ if(process.env.NODE_ENV.trim().toLowerCase() === 'production') {
 	require('custom-env').env('development');
 }
 
-console.log(`Running in ${process.env.NODE_ENV} mode!`);
+const logger = require('./utils/logger');
 
-console.log('Running on ', process.env.host);
+logger.info(`Running in ${process.env.NODE_ENV} mode!`);
+
+logger.info('Running on ' + process.env.host);
 
 const Minio = require('minio');
 
@@ -30,10 +32,10 @@ if(process.env.corsEnabled.toLowerCase() === 'true'){
 		whitelist.push(process.env.allowedOrigins);
 	}
 
-	console.log('Current acceptable CORS addresses: ', whitelist)
+	logger.info('Current acceptable CORS addresses: ' + whitelist)
 	corsOptions = {
 	  origin: function (origin, callback) {
-		console.log('origin: ', origin);
+		logger.debug('origin: ' +  origin);
 		const index = whitelist.findIndex((w) => {
 			return origin && origin.startsWith(w);
 		})
@@ -69,6 +71,6 @@ server.get('/', (req, res) => {
 })
 
 server.listen(process.env.listenOn, () => {
-		console.log('Platform: '+process.platform);
-		console.log('Listening on port '+process.env.listenOn);
+		logger.info('Platform: '+process.platform);
+		logger.info('Listening on port '+process.env.listenOn);
 	})

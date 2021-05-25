@@ -9,6 +9,7 @@ const uuidv4 = require('uuid/v4');
 const Minio = require('minio')
 const mime = require('mime');
 const url = require('url');
+const logger = require('./../utils/logger');
 
 // Asynch Middleware
 const asyncMiddleware = fn => (req, res, next) => {
@@ -40,8 +41,7 @@ function makeBucket(name, region = '') {
 					resolve(false);
 				}
 
-
-				console.log('Bucket created successfully in '+region+'.');
+				logger.debug('Bucket created successfully in ' + region + '.');
 				resolve(true);
 			});
 		} catch(err) {
@@ -53,7 +53,7 @@ function makeBucket(name, region = '') {
 function checkBucketExists(name) {
 	return new Promise(function(resolve, reject){
 		try {
-			console.log('Looking for bucked... ', name);
+			logger.debug('Looking for bucket... ' + name);
 			client.bucketExists(name, function(err, exists) {
 				if (err) {
 					resolve(false);
@@ -74,10 +74,10 @@ function statobject(bucket, file) {
 		try {
         client.statObject(bucket, file, function(err, stat) {
 			if (err) {
-				console.log(err)
+				logger.error(err);
 				reject(err);
 			}
-			console.log('sta: ', stat);
+			logger.debug('sta: ' + stat);
 			resolve(stat);
 		})
 		} catch(err) {
@@ -89,15 +89,15 @@ function statobject(bucket, file) {
 function putFileObject(bucket,dstfile,srcfile,metaData) {
     return new Promise((resolve, reject) => {
 		try {
-			console.log(srcfile);
+			logger.debug(srcfile);
 			const fileStream = fs.createReadStream(srcfile)
 			const fileStat = fs.stat(srcfile,async function(err, stats) {
 				if (err) {
-				return console.log(err)
+				return logger.error(err)
 				}
 				await client.putObject(bucket, dstfile, fileStream, stats.size, metaData, function(err, etag) {
 					if(err) {
-						console.log(err);
+						logger.error(err);
 						reject(err);
 					}
 					resolve(etag) // err should be null
@@ -131,14 +131,14 @@ function getobjectToCache(bucket, file) {
 					//console.log('stream created');
 
 					fileStream.on('error', (err) => {
-						console.log('Error in FS: ', err);
+						logger.error('Error in FS: ' + err);
 						return reject(err);
 					});
 
 					client.getObject(bucket, file, ((err, dataStream) => {
 						if (err) {
 							fileStream.destroy();
-							console.log('Error in getting object', err);
+							logger.error('Error in getting object: ' + err);
 							return reject(err);
 						}
 
@@ -149,12 +149,12 @@ function getobjectToCache(bucket, file) {
 						}));
 
 						dataStream.on('end', (() => {
-							console.log('End. Total size = ' + size)
+							logger.debug('End. Total size = ' + size);
 							return resolve(tmpFile);
 						}));
 
 						dataStream.on('error', ((ex) => {
-							console.log('Error in DS: ', err);
+							logger.error('Error in DS: ' + err);
 							return reject(err);
 						}));
 
@@ -183,7 +183,7 @@ function bucketObjectList(bucket) {
 					objects.push(obj.name)
 				})
 				objectsStream.on('error', function(err) {
-					console.log(err)
+					logger.errorg(err)
 					reject(err);
 				})
 				objectsStream.on('end', function() {
@@ -192,7 +192,7 @@ function bucketObjectList(bucket) {
 
 				});
 			} catch(err) {
-				console.log('rejecting', err);
+				logger.error('rejecting: ' + err);
 				reject(err);
 			}
     });
@@ -215,12 +215,12 @@ async function makeBucketIfNotExists(buck, region, tries = 0) {
 	if(!region) {
 		region = process.env.MinIO_DefaultRegion;
 	}
-	console.log('Checking if bucket "', buck, '" exists');
+	logger.debug('Checking if bucket "' + buck + '" exists');
 	return await checkBucketExists(buck).then((exists) => {
 		if(!exists && tries < 3) {
-			console.log('bucket does not exists, creating ', buck, ' at ', region);
-			makeBucket(buck, region).then(() => {
-				return makeBucketIfNotExists(buck, region, ++tries);
+			logger.debug('bucket does not exists, creating ' + buck + ' at ' + region);
+			makeBucket(buck, region).then(async () => {
+				return await makeBucketIfNotExists(buck, region, ++tries);
 			}).catch((err) => {
 				throw Error(err);
 			});
@@ -228,7 +228,7 @@ async function makeBucketIfNotExists(buck, region, tries = 0) {
 			return exists;
 		}
 	}).catch((err) => {
-		console.log('error making bucket:', err);
+		logger.error('error making bucket: ' + err);
 		throw Error(err);
 	});
 }
@@ -255,11 +255,11 @@ function mergeBucket(src,dst,urlPart) {
 							'SubjectId': dst,
 							'previousSubjectIDs': previousSubjectIDs
 					};
-					console.log('sub meta: ', metaData);
+					logger.debug('sub meta: ' + metaData);
 
 					let makeTry = 0;
 
-					console.log('making bucket if it does not exist:', dst);
+					logger.debug('making bucket if it does not exist:' + dst);
 					let exists = await makeBucketIfNotExists(dst);
 					if(exists === false){
 						return reject(new Error('Unable to create bucket'));
@@ -423,11 +423,10 @@ const formPutResult = async (req,res,next) => {
 	if(req.userAccess.indexOf(process.env.AccessWriteRole) === -1){ // Make this confirgurable
 		res.status(401).json({
 			message: "Authorisation failed."
-		});
-		res.end();
+		}).end();
 		return;
 	}
-	
+
 	const form = new multiparty.Form();
 	let count = 0;
 	let fileMetadata = {};
@@ -437,10 +436,8 @@ const formPutResult = async (req,res,next) => {
 
 	let size = 0;
 
-
 	form.on('error', function(err) {
-	  res.status(500).json(err);
-	  return res.end();
+	  return res.status(500).json(err).end();
 	});
 
 	form.on('field', function(name, value) {
@@ -451,15 +448,20 @@ const formPutResult = async (req,res,next) => {
 			subjectId = value;
 			if(subjectId.trim().length === 0) {
 				if(process.env.use_fallback_bucket.trim().toLowerCase() !== 'true') {
-					return res.status(400).json({
-						status : 'failed',
-						error: 'SubjectId is empty'
-					});
+					logger.error('OnField: StatusId is empty, and not using fall back!');
+					flatData = {
+						status: 'fail',
+						message : 'OnField: StatusId is empty, and not using fall back!'
+					};
+					returnData.push(flatData);
+					form.destroy();
+					return;
 				}
 				subjectId = process.env.fallback_bucket.trim();
 			}
 		}
-    });
+  });
+
 
 	// Parts are emitted when parsing the form
 	form.on('part', async (part) => {
@@ -471,8 +473,11 @@ const formPutResult = async (req,res,next) => {
 		}
 
 		part.on('error', function(err) {
-			res.status(500).json(err);
-			return res.end();
+			logger.error('OnError called: ' + err);
+			returnData.push({
+				message : 'OnError Called',
+				error: err
+			});
 		});
 
 		// filename is defined when this is a file
@@ -494,10 +499,14 @@ const formPutResult = async (req,res,next) => {
 
 		if(subjectId.trim().length === 0) {
 			if(process.env.use_fallback_bucket.trim().toLowerCase() !== 'true') {
-				return res.status(400).json({
-					status : 'failed',
-					error: 'SubjectId is empty'
-				});
+				logger.error('OnPart: StatusId is empty, and not using fall back!');
+				flatData = {
+					status: 'fail',
+					message : 'OnPart: StatusId is empty, and not using fall back!'
+				};
+				returnData.push(flatData);
+				form.destroy();
+				return;
 			}
 			subjectId = process.env.fallback_bucket.trim();
 		}
@@ -508,25 +517,42 @@ const formPutResult = async (req,res,next) => {
 
 		const region = '';
 
-		console.log('FormPutResult: checking if bucket exists:', subjectId)
+		logger.debug('FormPutResult: checking if bucket exists:' + subjectId)
 		let exists = false;
 		try {
 			exists = await makeBucketIfNotExists(subjectId);
 		} catch(ex) {
-			console.log('Exception checking if bucket exists, or creating it: ', ex);
+			logger.error('Exception checking if bucket exists, or creating it: ' + ex);
+			flatData = {
+				status: 'fail',
+				message : 'Exception checking if bucket exists, or creating it',
+				error: ex
+			};
+			returnData.push(flatData);
+			form.destroy();
 		}
-		console.log('bucket exists? ', exists);
+		logger.debug('bucket exists? ' + exists);
 		if(exists === false){
-			console.log('Unable to upload due to bucket not existing and unable to create bucket.')
-			returnData.push({
-				status : 'failed',
-				field : part.name,
-				fileName : part.filename,
-				error: 'Unable to upload due to bucket not existing and unable to create bucket.'
-			});
+			logger.error('Unable to upload due to bucket not existing and unable to create bucket.');
+			flatData = {
+				status: 'fail',
+				message : 'Unable to upload due to bucket not existing and unable to create bucket.'
+			};
+			returnData.push(flatData);
+			form.destroy();
 		} else {
 			await client.putObject(subjectId, newGUID, part, metaData, function(err, etag) {
-			  console.log('err: ', err, 'etag:', etag) // err should be null
+				if(err) {
+					logger.error('err: ' + err);
+					flatData = {
+						status: 'fail',
+						message : 'Exception at client.putObject()',
+						error: err
+					};
+					returnData.push(flatData);
+					form.destroy();
+				}
+				logger.debug('Etag: ' + etag);
 			})
 
 			flatData = {
@@ -546,9 +572,9 @@ const formPutResult = async (req,res,next) => {
 
 	// Close emitted after form parsed
 	form.on('close', function() {
-		console.log('Closing Form');
+		logger.debug('Closing Form');
 		if(returnData.length > 1) {
-			console.log('content size: ', size);
+			logger.debug('content size: ' + size);
 			returnData = returnData.reverse().map((r) => {
 				size  = size - r.size
 				r.size = size;
@@ -614,9 +640,9 @@ const adminMergeBucketsResult = async (req,res,next) => {
 	}
 	const src = req.params.srcbucket;
 	const dst = req.params.dstbucket
-	console.log('Source: ' + src + ' Destination: ' + dst);
+	logger.debug('Source: ' + src + ' Destination: ' + dst);
 
-	console.log('req', req);
+	logger.debug('req' + req);
 
 	const urlPart = req.protocol + '://' + req.get('host') + '/storage/retrieve/';
 	try {
@@ -636,7 +662,7 @@ const adminMergeBucketsResult = async (req,res,next) => {
 }
 
 const testStorageEndpoint = async (req,res,next) => {
-	console.log('testing storage');
+	logger.debug('testing storage');
 	res.status(200).json({
 		message: 'Storage Endpoint Working'
 	});
