@@ -1,11 +1,12 @@
-const jwt = require('jsonwebtoken')
+const jwt = require('jsonwebtoken');
 const verifyToken = require('./verify-token');
 const fs = require("fs");
 const path = require("path");
 const express = require('express');
 const multiparty = require('multiparty');
-const router = express.Router()
-const uuidv4 = require('uuid/v4');
+const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
+//const uuidv4 = require('uuid/v4');
 const Minio = require('minio')
 const mime = require('mime');
 const url = require('url');
